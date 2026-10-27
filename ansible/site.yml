@@ -1,0 +1,12 @@
+- name: Base setup for all servers
+  hosts: all
+  become: true
+  roles:
+    - common
+    - node_exporter
+
+- name: Deploy the application
+  hosts: role_app
+  become: true
+  roles:
+    - app

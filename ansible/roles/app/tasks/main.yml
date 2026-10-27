@@ -1,0 +1,36 @@
+- name: Create app config directory
+  ansible.builtin.file:
+    path: /etc/node-devops
+    state: directory
+    mode: "0755"
+
+- name: Write environment variables file
+  ansible.builtin.template:
+    src: app.env.j2
+    dest: /etc/node-devops/app.env
+    mode: "0640"
+  register: app_env_file
+
+- name: Run app container
+  community.docker.docker_container:
+    name: node-app
+    image: "{{ app_image }}:{{ app_image_tag }}"
+    pull: missing
+    recreate: "{{ app_env_file.changed }}"
+    restart_policy: unless-stopped
+    env_file: /etc/node-devops/app.env
+    published_ports:
+      - "{{ app_port }}:{{ app_port }}"
+    log_driver: json-file
+    log_options:
+      max-size: "10m"
+      max-file: "3"
+
+- name: Wait until the app is healthy
+  ansible.builtin.uri:
+    url: "http://localhost:{{ app_port }}/health"
+    status_code: 200
+  register: health
+  retries: 10
+  delay: 3
+  until: health.status == 200
