@@ -1,0 +1,7 @@
+app_image: "ghcr.io/karthik-devops-engg/node-devops-pipeline"
+app_image_tag: "latest"
+app_port: 3000
+app_env:
+  NODE_ENV: production
+  PORT: "3000"
+  LOG_LEVEL: info
