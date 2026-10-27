@@ -15,7 +15,7 @@
   community.docker.docker_container:
     name: node-app
     image: "{{ app_image }}:{{ app_image_tag }}"
-    pull: always
+    pull: missing
     recreate: "{{ app_env_file.changed }}"
     restart_policy: unless-stopped
     env_file: /etc/node-devops/app.env
