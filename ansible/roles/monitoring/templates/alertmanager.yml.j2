@@ -1,0 +1,9 @@
+# Alerts are grouped and routed here. Add email/Slack/PagerDuty receivers in production.
+route:
+  receiver: default
+  group_by: ["alertname"]
+  group_wait: 30s
+  repeat_interval: 4h
+
+receivers:
+  - name: default

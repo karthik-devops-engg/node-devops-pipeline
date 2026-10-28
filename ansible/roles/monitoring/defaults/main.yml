@@ -1,0 +1,6 @@
+monitoring_dir: /opt/monitoring
+prometheus_image: prom/prometheus:v2.53.0
+alertmanager_image: prom/alertmanager:v0.27.0
+grafana_image: grafana/grafana:11.1.0
+grafana_admin_password: "change-me"   # in production: Ansible Vault
+app_port: 3000

@@ -24,4 +24,16 @@ describe('Sample app', () => {
     const res = await request(app).get('/does-not-exist');
     expect(res.statusCode).toBe(404);
   });
+
+  test('GET /simulate-error returns 500', async () => {
+    const res = await request(app).get('/simulate-error');
+    expect(res.statusCode).toBe(500);
+  });
+
+  test('request metrics are recorded', async () => {
+    await request(app).get('/health');
+    const res = await request(app).get('/metrics');
+    expect(res.text).toContain('http_requests_total');
+    expect(res.text).toContain('http_request_duration_seconds');
+  });
 });
