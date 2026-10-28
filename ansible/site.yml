@@ -10,3 +10,9 @@
   become: true
   roles:
     - app
+
+- name: Set up monitoring stack
+  hosts: role_monitoring
+  become: true
+  roles:
+    - monitoring

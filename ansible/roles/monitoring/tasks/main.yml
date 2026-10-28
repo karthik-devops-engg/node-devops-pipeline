@@ -1,0 +1,38 @@
+- name: Create monitoring directory
+  ansible.builtin.file:
+    path: "{{ monitoring_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Write monitoring config files
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "{{ monitoring_dir }}/{{ item }}"
+    mode: "0644"
+  loop:
+    - docker-compose.yml
+    - prometheus.yml
+    - alert_rules.yml
+    - alertmanager.yml
+    - grafana-datasource.yml
+  register: monitoring_config
+
+- name: Start monitoring stack
+  community.docker.docker_compose_v2:
+    project_src: "{{ monitoring_dir }}"
+    state: present
+
+- name: Restart stack when config changed
+  community.docker.docker_compose_v2:
+    project_src: "{{ monitoring_dir }}"
+    state: restarted
+  when: monitoring_config.changed
+
+- name: Wait for Prometheus to be ready
+  ansible.builtin.uri:
+    url: http://localhost:9090/-/ready
+    status_code: 200
+  register: prom_ready
+  retries: 10
+  delay: 3
+  until: prom_ready.status == 200
