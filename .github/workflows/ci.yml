@@ -57,3 +57,88 @@ jobs:
           context: app
           push: ${{ github.event_name == 'push' }}
           tags: ghcr.io/${{ github.repository }}:${{ github.sha }}
+
+  terraform:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform/envs/dev
+    env:
+      TF_VAR_my_ip_cidr: ${{ vars.MY_IP_CIDR }}
+    outputs:
+      alb_dns: ${{ steps.out.outputs.alb_dns }}
+      app_sg_id: ${{ steps.out.outputs.app_sg_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-north-1
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.17.0
+          terraform_wrapper: false
+      - name: Write SSH public key for the key pair resource
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ vars.SSH_PUBLIC_KEY }}" > ~/.ssh/node-devops.pub
+      - run: terraform init -input=false
+      - run: terraform fmt -check -recursive ../..
+      - run: terraform validate
+      - run: terraform plan -input=false -out=tfplan
+      - run: terraform apply -input=false tfplan
+      - id: out
+        run: |
+          echo "alb_dns=$(terraform output -raw alb_dns_name)" >> "$GITHUB_OUTPUT"
+          echo "app_sg_id=$(terraform output -raw app_sg_id)" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: terraform
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ansible
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-north-1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ansible boto3 botocore
+      - name: Install SSH private key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/node-devops
+          chmod 600 ~/.ssh/node-devops
+      - name: Allow this runner to SSH (temporary)
+        id: ip
+        run: |
+          IP=$(curl -s https://checkip.amazonaws.com)
+          echo "ip=$IP" >> "$GITHUB_OUTPUT"
+          aws ec2 authorize-security-group-ingress \
+            --group-id ${{ needs.terraform.outputs.app_sg_id }} \
+            --protocol tcp --port 22 --cidr "$IP/32"
+      - name: Deploy with Ansible
+        run: ansible-playbook site.yml --limit role_app -e app_image_tag=${{ github.sha }}
+      - name: Remove temporary SSH rule
+        if: always()
+        run: |
+          aws ec2 revoke-security-group-ingress \
+            --group-id ${{ needs.terraform.outputs.app_sg_id }} \
+            --protocol tcp --port 22 --cidr "${{ steps.ip.outputs.ip }}/32"
+      - name: Smoke test through the load balancer
+        run: |
+          for i in $(seq 1 10); do
+            if curl -fsS "http://${{ needs.terraform.outputs.alb_dns }}/health"; then
+              echo " - smoke test passed"; exit 0
+            fi
+            sleep 6
+          done
+          echo "Smoke test failed"; exit 1
