@@ -20,7 +20,14 @@ const httpDuration = new client.Histogram({
   buckets: [0.05, 0.1, 0.25, 0.5, 1, 2, 5],
 });
 
+// Structured JSON log line per request (skipped during tests)
+function logRequest(entry) {
+  if (process.env.NODE_ENV === 'test') return;
+  console.log(JSON.stringify(entry));
+}
+
 app.use((req, res, next) => {
+  const start = process.hrtime.bigint();
   const endTimer = httpDuration.startTimer();
   res.on('finish', () => {
     const labels = {
@@ -30,6 +37,14 @@ app.use((req, res, next) => {
     };
     httpRequests.inc(labels);
     endTimer(labels);
+    logRequest({
+      timestamp: new Date().toISOString(),
+      level: res.statusCode >= 500 ? 'error' : 'info',
+      method: req.method,
+      path: req.originalUrl,
+      status: res.statusCode,
+      duration_ms: Number(process.hrtime.bigint() - start) / 1e6,
+    });
   });
   next();
 });
