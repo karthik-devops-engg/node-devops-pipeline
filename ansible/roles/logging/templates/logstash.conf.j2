@@ -1,0 +1,22 @@
+input {
+  beats {
+    port => 5044
+  }
+}
+
+filter {
+  # App logs are JSON - parse them into searchable fields
+  if [message] =~ /^\{.*\}$/ {
+    json {
+      source => "message"
+      target => "app"
+    }
+  }
+}
+
+output {
+  elasticsearch {
+    hosts => ["http://elasticsearch:9200"]
+    index => "node-devops-logs-%{+YYYY.MM.dd}"
+  }
+}
