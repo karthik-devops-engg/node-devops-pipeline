@@ -1,0 +1,28 @@
+# Managed by Ansible
+filebeat.inputs:
+  # Application container logs (Docker JSON log files)
+  - type: container
+    paths:
+      - /var/lib/docker/containers/*/*.log
+    processors:
+      - add_docker_metadata: ~
+
+  # System logs
+  - type: filestream
+    id: system-logs
+    paths:
+      - /var/log/syslog
+      - /var/log/auth.log
+    fields:
+      log_source: system
+
+processors:
+  - add_host_metadata: ~
+  - add_fields:
+      target: ""
+      fields:
+        environment: dev
+        role: app
+
+output.logstash:
+  hosts: ["{{ logstash_host }}:5044"]

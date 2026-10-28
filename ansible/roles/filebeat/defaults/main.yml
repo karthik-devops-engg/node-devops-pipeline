@@ -1,0 +1,2 @@
+filebeat_version: "8.15.3"
+logstash_host: "{{ hostvars[groups['role_monitoring'][0]].private_ip_address }}"

@@ -1,0 +1,28 @@
+- name: Create Filebeat config directory
+  ansible.builtin.file:
+    path: /etc/filebeat
+    state: directory
+    mode: "0755"
+
+- name: Write Filebeat config
+  ansible.builtin.template:
+    src: filebeat.yml.j2
+    dest: /etc/filebeat/filebeat.yml
+    owner: root
+    group: root
+    mode: "0644"
+  register: filebeat_config
+
+- name: Run Filebeat container
+  community.docker.docker_container:
+    name: filebeat
+    image: "docker.elastic.co/beats/filebeat:{{ filebeat_version }}"
+    restart_policy: unless-stopped
+    user: root
+    recreate: "{{ filebeat_config.changed }}"
+    command: filebeat -e --strict.perms=false
+    volumes:
+      - /etc/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/log:/var/log:ro

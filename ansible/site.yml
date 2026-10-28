@@ -16,3 +16,15 @@
   become: true
   roles:
     - monitoring
+
+- name: Set up centralised logging (ELK)
+  hosts: role_monitoring
+  become: true
+  roles:
+    - logging
+
+- name: Ship logs from app servers
+  hosts: role_app
+  become: true
+  roles:
+    - filebeat

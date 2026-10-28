@@ -1,0 +1,42 @@
+- name: Set vm.max_map_count (required by Elasticsearch)
+  ansible.posix.sysctl:
+    name: vm.max_map_count
+    value: "262144"
+    state: present
+    reload: true
+
+- name: Create logging directory
+  ansible.builtin.file:
+    path: "{{ logging_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Write logging config files
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "{{ logging_dir }}/{{ item }}"
+    mode: "0644"
+  loop:
+    - docker-compose.yml
+    - logstash.conf
+  register: logging_config
+
+- name: Start ELK stack
+  community.docker.docker_compose_v2:
+    project_src: "{{ logging_dir }}"
+    state: present
+
+- name: Restart ELK when config changed
+  community.docker.docker_compose_v2:
+    project_src: "{{ logging_dir }}"
+    state: restarted
+  when: logging_config.changed
+
+- name: Wait for Kibana to be ready (can take ~2 minutes)
+  ansible.builtin.uri:
+    url: http://localhost:5601/api/status
+    status_code: 200
+  register: kibana_ready
+  retries: 30
+  delay: 10
+  until: kibana_ready.status == 200
